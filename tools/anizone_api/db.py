@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS crawl_state (
     error    TEXT,
     fetched_at TEXT
 );
+CREATE INDEX IF NOT EXISTS ix_state_id ON crawl_state(id);
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
 """
 
