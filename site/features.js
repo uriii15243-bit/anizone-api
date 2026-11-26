@@ -24,7 +24,7 @@
   }
   function ilLabel(a) {
     var n = nextEp(a);
-    return n ? DAY_HE[ilDayIndex(n.date)] + " " + fmtTime.format(n.date) : "";
+    return n && n.date - Date.now() < 14 * 864e5 ? DAY_HE[ilDayIndex(n.date)] + " " + fmtTime.format(n.date) : "";
   }
   function countdown(date) {
     var ms = date - Date.now();
@@ -73,7 +73,11 @@
           return '<button type="button" class="wl-btn' + (cur === k ? " on" : "") + '" data-s="' + k + '" aria-pressed="' + (cur === k) + '">' +
             (cur === k ? "✓ " : "") + STATUS[k] + "</button>";
         }).join("") + "</div>" +
-        (next ? '<div class="next-ep"><span class="dot"></span>' + (next.episode ? "פרק " + next.episode : "הפרק הבא") + ": <b>" +
+        (next && next.date - Date.now() > 14 * 864e5
+          ? '<div class="next-ep off">⏸ כרגע בהפסקה · ' + (next.episode ? "פרק " + next.episode : "הפרק הבא") + " צפוי בסביבות " +
+            fmtDate.format(next.date) + "." + new Intl.DateTimeFormat("en", {timeZone: IL, year: "numeric"}).format(next.date) +
+            ' <small>(מועד משוער, עוד לא סופי)</small></div>'
+        : next ? '<div class="next-ep"><span class="dot"></span>' + (next.episode ? "פרק " + next.episode : "הפרק הבא") + ": <b>" +
           DAY_HE[ilDayIndex(next.date)] + " " + fmtDate.format(next.date) + " בשעה " + fmtTime.format(next.date) + "</b> · " +
           countdown(next.date) + ' <small>(שעון ישראל, לפי השידור ביפן)</small></div>'
         : a.status === "בשידור" && a.next_episode === null
@@ -102,6 +106,7 @@
       return n ? {a: a, next: n.date, ep: n.episode, key: fmtKey.format(n.date)} : null;
     }).filter(Boolean).sort(function (p, q) { return p.next - q.next; });
     var week = all.filter(function (x) { return keys.indexOf(x.key) >= 0; });
+    all = all.filter(function (x) { return x.next - now < 14 * 864e5; }); // far-off dates are only estimates
     var mine = function (x) { var s = statusOf(x.a.id); return s === "watching" || s === "plan"; };
     var sel = /^[0-6]$/.test(tab || "") ? +tab : 0;
     var count = function (k) { return week.filter(function (x) { return x.key === k; }).length; };
