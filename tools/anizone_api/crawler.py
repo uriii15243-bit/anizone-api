@@ -167,6 +167,9 @@ class Crawler:
         if not anime.get("id"):
             set_state(self.con, url, url_id, None, r.status, "no id")
             return None, links
+        if lastmod is None:  # a refresh: keep the sitemap date we already know
+            prev = get_state(self.con, url)
+            lastmod = prev["lastmod"] if prev else None
         upsert_anime(self.con, anime, lastmod)
         set_state(self.con, url, anime["id"], lastmod, 200)
         return anime, links
@@ -193,9 +196,12 @@ class Crawler:
 
     def run(self, limit: int | None = None, force: bool = False,
             urls: Iterable[tuple[str, str | None]] | None = None,
-            extra_ids: Iterable[int] = (), follow_links: bool = True) -> dict:
+            extra_ids: Iterable[int] = (), follow_links: bool = True, refresh: int = 0) -> dict:
         """Crawl sitemap pages, then `extra_ids`, then any anime linked from
-        fetched pages (follow_links) - until nothing new is left."""
+        fetched pages (follow_links) - until nothing new is left.
+
+        refresh=N also re-fetches up to N known anime that have no sitemap date:
+        every airing anime first, then the ones checked longest ago (a rotation)."""
         log.info("AniZone Open API v%s", __version__)
         items = list(urls) if urls is not None else self.discover()
         queue: deque[tuple[str, str | None]] = deque()
@@ -220,9 +226,28 @@ class Crawler:
             add(url, lm)
         n_sitemap = len(queue)
         extra = sum(add(f"{BASE_URL}/anime/{i}", None) for i in extra_ids)
+        refreshing = 0
+        if refresh:
+            queued = {int(m.group(1)) for u, _ in queue if (m := _ID_RE.search(u))}
+            rows = self.con.execute(
+                "SELECT a.id, (SELECT url FROM crawl_state c WHERE c.id = a.id AND c.status = 200"
+                "  ORDER BY c.lastmod IS NULL LIMIT 1) AS url"
+                " FROM anime a LEFT JOIN (SELECT id, MAX(fetched_at) AS f FROM crawl_state"
+                "  WHERE status = 200 GROUP BY id) s ON s.id = a.id"
+                " ORDER BY (a.status = 'בשידור') DESC, s.f IS NOT NULL, s.f, a.popularity IS NULL, a.popularity"
+            ).fetchall()
+            for r in rows:
+                if refreshing >= refresh:
+                    break
+                if r["id"] in queued:
+                    continue
+                queue.append((r["url"] or f"{BASE_URL}/anime/{r['id']}", None))
+                queued.add(r["id"])
+                seen.add(r["id"])
+                refreshing += 1
         # anime already known from earlier runs are "seen" too (their links were followed then)
-        log.info("%d pages in sitemaps (%d to fetch), %d extra ids to try, %d already up to date",
-                 len(items), n_sitemap, extra, skipped)
+        log.info("%d pages in sitemaps (%d to fetch), %d extra ids to try, %d to refresh, %d already up to date",
+                 len(items), n_sitemap, extra, refreshing, skipped)
         log.info("~%.1f h at %.1fs/page (more may be discovered from links)",
                  len(queue) * self.delay / 3600, self.delay)
 
@@ -251,6 +276,6 @@ class Crawler:
         set_meta(self.con, "last_crawl", now())
         set_meta(self.con, "sitemap_total", len(items))
         total = self.con.execute("SELECT COUNT(*) FROM anime").fetchone()[0]
-        return {"in_sitemaps": len(items), "fetched": ok, "not_on_site": missing, "failed": fail,
+        return {"in_sitemaps": len(items), "refreshed": refreshing, "fetched": ok, "not_on_site": missing, "failed": fail,
                 "found_via_links": discovered, "already_up_to_date": skipped,
                 "left_in_queue": len(queue), "total_in_database": total}
