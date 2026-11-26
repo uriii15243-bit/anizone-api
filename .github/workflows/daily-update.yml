@@ -43,7 +43,7 @@ jobs:
 
       - name: סריקה של מה שהשתנה ב-AniZone
         working-directory: tools
-        run: python -m anizone_api crawl --adopt-existing --db "$RUNNER_TEMP/anizone.db" --user-agent "AniZoneOpenAPI/1.0 (+https://github.com/${{ github.repository }})"
+        run: python -m anizone_api crawl --adopt-existing --refresh 900 --db "$RUNNER_TEMP/anizone.db" --user-agent "AniZoneOpenAPI/1.0 (+https://github.com/${{ github.repository }})"
 
       - name: בניית ה-API מחדש
         working-directory: tools
