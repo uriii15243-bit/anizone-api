@@ -58,7 +58,7 @@ function card(a, rank) {
   const sc = a.scores?.israel && a.scores?.israel_scored_by ? a.scores.israel
            : a.scores?.mal || null;
   return `<a class="card" href="#/anime/${+a.id}">
-    <div class="pic">${poster(a.poster, t)}
+    <div class="pic">${poster(a.poster, t)}${window.AZX ? AZX.badge(a.id) : ""}
       ${sc ? `<span class="score">★ ${(+sc).toFixed(1)}</span>` : ""}
       ${rank ? `<span class="rank">${rank}</span>` : ""}</div>
     <h3>${esc(t)}</h3><small>${esc(meta(a))}</small></a>`;
@@ -232,13 +232,14 @@ async function animePage(id) {
   const t = titleOf(a);
   document.title = `${t} – אנימה בעברית`;
   const s = a.scores || {};
-  const alt = [a.titles?.english !== t && a.titles?.english, a.titles?.romaji !== a.titles?.english && a.titles?.romaji, a.titles?.japanese].filter(Boolean);
+  const alt = [a.titles?.english, a.titles?.romaji, a.titles?.japanese].filter(Boolean)
+    .filter((x, i, arr) => x.toLowerCase() !== t.toLowerCase() && arr.findIndex(y => y.toLowerCase() === x.toLowerCase()) === i);
   const syn = (a.synopsis_hebrew || "").split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
   const bg = (a.background_hebrew || "").split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
   const he = c => c && (c.he || c.en);
   const info = [
     ["סוג", a.type], ["פרקים", a.episodes], ["אורך פרק", a.duration_minutes ? a.duration_minutes + " דקות" : ""],
-    ["סטטוס", a.status], ["עונה", a.season?.label], ["שידור", a.broadcast?.label ? a.broadcast.label + " (שעון ישראל)" : ""],
+    ["סטטוס", a.status], ["עונה", a.season?.label], ["שידור", (window.AZX && a.status === "בשידור" && AZX.broadcastIL(a.broadcast)) || (a.broadcast?.label ? a.broadcast.label + " (שעון יפן)" : "")],
     ["תחילת שידור", a.aired_from ? new Date(a.aired_from).toLocaleDateString("he-IL") : ""],
     ["דמוגרפיה", he(a.demographic)], ["סטודיו", (a.studios || []).join(", ")],
     ["מפיקים", (a.producers || []).join(", ")], ["זכויות", (a.licensors || []).join(", ")],
@@ -266,6 +267,7 @@ async function animePage(id) {
           const slug = (c.en || c.he || "").toLowerCase().replace(/[^\w֐-׿]+/g, "-").replace(/^-|-$/g, "");
           return (a.categories || []).includes(c) ? `<a class="chip" href="#/browse/category/${encodeURIComponent(slug)}">${esc(he(c))}</a>` : `<span class="chip">${esc(he(c))}</span>`;
         }).join("")}</div>
+        <div id="az-extras"></div>
         <div class="btns">${a.trailer ? `<a class="btn" href="#trailer" id="go-trailer">▶ צפייה בטריילר</a>` : ""}
           <a class="btn ghost" href="${esc(a.url || "https://anizone.co.il")}" target="_blank" rel="noopener">לדף ב-AniZone ↗</a></div>
       </div>
@@ -293,6 +295,7 @@ async function animePage(id) {
       <div class="credit">המידע על האנימה באדיבות <a href="${esc(a.url || "https://anizone.co.il")}" target="_blank" rel="noopener">AniZone</a>.</div>
     </aside>
   </div>`;
+  if (window.AZX) AZX.animeExtras(a, document.getElementById("az-extras"));
   document.getElementById("go-trailer")?.addEventListener("click", e => {
     e.preventDefault(); document.getElementById("trailer")?.scrollIntoView({behavior: "smooth"});
   });
@@ -321,10 +324,13 @@ async function route() {
       case "seasons": await seasonsPage(parts[1], parts[2]); break;
       case "search": await searchPage(parts.slice(1).join("/")); break;
       case "random": await random(); break;
+      case "schedule": await AZX.schedulePage(parts[1]); break;
+      case "list": AZX.listPage(parts[1]); break;
       default: await home();
     }
   } catch (e) { console.error(e); fail(); }
 }
+window.AZ = {get, card, poster, esc, titleOf, nf, app, setNav, fail};
 addEventListener("hashchange", route);
 route();
 
