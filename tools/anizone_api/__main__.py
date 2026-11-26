@@ -47,6 +47,7 @@ def main(argv=None):
     w = sub.add_parser("export-api", help="build the public static JSON API into a folder (for GitHub Pages)")
     w.add_argument("--db", default=os.environ.get("ANIZONE_DB", "anizone.db"))
     w.add_argument("--out", default="public")
+    w.add_argument("--no-airing", action="store_true", help="skip next-episode dates from AniList")
     w.add_argument("--min-israel-votes", type=int, default=5,
                    help="minimum Israeli ratings for the /top/israel list")
 
@@ -92,7 +93,9 @@ def main(argv=None):
 
     elif a.cmd == "export-api":
         from .static_api import export_static_api
-        res = export_static_api(a.db, a.out, a.min_israel_votes)
+        from .airing import fetch_next_episodes
+        res = export_static_api(a.db, a.out, a.min_israel_votes,
+                                airing_fetch=None if a.no_airing else fetch_next_episodes)
         print(json.dumps(res, indent=2, ensure_ascii=False))
         print(f"\nPreview:  python -m http.server 8080 --directory {a.out}   ->  http://localhost:8080")
 
