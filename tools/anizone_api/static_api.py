@@ -42,6 +42,9 @@ def slugify(s: str) -> str:
     return s or "unknown"
 
 
+UPCOMING = ("בשידור", "עדיין לא שודר")
+
+
 def summary(a: dict) -> dict:
     t = a.get("titles") or {}
     sc = a.get("scores") or {}
@@ -81,7 +84,7 @@ def _paginate(out: Path, base: str, items: list[dict], extra: dict | None = None
     return pages
 
 
-def export_static_api(db_path: str, out_dir: str, min_israel_votes: int = 5) -> dict:
+def export_static_api(db_path: str, out_dir: str, min_israel_votes: int = 5, airing_fetch=None) -> dict:
     out = Path(out_dir)
     v1 = out / "v1"
     if v1.exists():
@@ -89,6 +92,11 @@ def export_static_api(db_path: str, out_dir: str, min_israel_votes: int = 5) -> 
     v1.mkdir(parents=True)
 
     con = connect(db_path, readonly=True)
+    # exact next-episode dates (AniList); None = not checked / unavailable
+    next_eps = None
+    if airing_fetch:
+        ids = [r[0] for r in con.execute("SELECT id FROM anime WHERE json_extract(data, '$.status') IN (?, ?)", UPCOMING)]
+        next_eps = airing_fetch(ids)
     summaries: list[dict] = []
     search_rows: list[list] = []
     seasons: dict[tuple, list] = defaultdict(list)
@@ -105,10 +113,12 @@ def export_static_api(db_path: str, out_dir: str, min_israel_votes: int = 5) -> 
         b = a.get("broadcast")
         if isinstance(b, dict):
             b["timezone"] = "Asia/Tokyo"  # AniZone lists the Japanese TV slot (JST)
+        if next_eps is not None and a.get("status") in UPCOMING:
+            a["next_episode"] = next_eps.get(a["id"])  # null = nothing scheduled (e.g. on a break)
         _write(v1 / "anime" / f"{a['id']}.json", a)
         s = summary(a)
-        if a.get("status") == "בשידור" and isinstance(b, dict) and b.get("day") and b.get("time"):
-            schedule.append({**s, "broadcast": b, "aired_from": a.get("aired_from")})
+        if a.get("next_episode"):
+            schedule.append({**s, "broadcast": b, "aired_from": a.get("aired_from"), "next_episode": a["next_episode"]})
         summaries.append(s)
         t = a.get("titles") or {}
         search_rows.append([a["id"], t.get("hebrew"), t.get("english"), t.get("romaji"),
@@ -170,9 +180,12 @@ def export_static_api(db_path: str, out_dir: str, min_israel_votes: int = 5) -> 
         "data": search_rows,
     })
     _write(v1 / "ids.json", {"count": len(summaries), "data": sorted(s["id"] for s in summaries)})
-    schedule.sort(key=by_pop)
+    schedule.sort(key=lambda x: (x["next_episode"]["airing_at"], by_pop(x)))
     _write(v1 / "schedule.json", {
-        "note": "airing anime and their weekly Japanese TV slot; broadcast.timezone is Asia/Tokyo (JST)",
+        "note": "anime with a scheduled next episode, soonest first. next_episode.airing_at is UTC "
+                "(source: AniList, anilist.co); broadcast is AniZone's regular Japanese TV slot (Asia/Tokyo)",
+        "available": next_eps is not None,
+        "checked_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "count": len(schedule), "data": schedule})
 
     meta = {r["key"]: r["value"] for r in con.execute("SELECT key, value FROM meta")}
