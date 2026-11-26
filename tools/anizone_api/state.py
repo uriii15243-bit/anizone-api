@@ -20,10 +20,10 @@ STATE_VERSION = 1
 
 def save_state(db_path: str, out_path: str) -> dict:
     con = connect(db_path, readonly=True)
-    rows = con.execute("SELECT url, id, lastmod, status FROM crawl_state ORDER BY url").fetchall()
+    rows = con.execute("SELECT url, id, lastmod, status, fetched_at FROM crawl_state ORDER BY url").fetchall()
     meta = {r["key"]: r["value"] for r in con.execute("SELECT key, value FROM meta")}
     data = {"version": STATE_VERSION, "meta": meta,
-            "urls": [[r["url"], r["id"], r["lastmod"], r["status"]] for r in rows]}
+            "urls": [[r["url"], r["id"], r["lastmod"], r["status"], r["fetched_at"]] for r in rows]}
     out = Path(out_path)
     out.parent.mkdir(parents=True, exist_ok=True)
     raw = json.dumps(data, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode()
@@ -44,8 +44,8 @@ def load_state(db_path: str, api_dir: str, state_path: str | None) -> dict:
         with con:
             con.executemany(
                 "INSERT OR REPLACE INTO crawl_state(url,id,lastmod,status,error,fetched_at)"
-                " VALUES (?,?,?,?,NULL,NULL)", [tuple(u) for u in data["urls"]])
-        for url, aid, lastmod, status in data["urls"]:
+                " VALUES (?,?,?,?,NULL,?)", [tuple((list(u) + [None])[:5]) for u in data["urls"]])
+        for url, aid, lastmod, status, *_ in data["urls"]:
             if aid is not None and lastmod and status == 200:
                 lastmods[aid] = lastmod
         for k, v in (data.get("meta") or {}).items():
