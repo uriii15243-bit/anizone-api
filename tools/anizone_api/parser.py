@@ -317,7 +317,7 @@ def parse_broadcast(soup: BeautifulSoup) -> dict:
             day = next((v for k, v in DAYS_HE.items() if text.startswith(k)), None)
             tm = re.search(r"\b(\d{1,2}:\d{2})\b", text)
             out["broadcast"] = {"label": text, "day": day, "time": tm.group(1) if tm else None,
-                                "timezone": "Asia/Jerusalem"}
+                                "timezone": "Asia/Tokyo"}  # AniZone shows the Japanese TV slot
         elif label == "סטטוס" and "status" not in out:
             out["status"] = _clean(_text(val))
     return out
