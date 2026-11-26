@@ -31,6 +31,9 @@ def main(argv=None):
     c.add_argument("--adopt-existing", action="store_true",
                    help="sitemap pages never seen before but already in the database count as up to date "
                         "(first run on a new machine without a state file)")
+    c.add_argument("--refresh", type=int, default=0,
+                   help="also re-fetch up to N known anime without a sitemap date "
+                        "(airing first, then the longest unchecked) - a daily rotation")
 
     s = sub.add_parser("serve", help="run the REST API")
     s.add_argument("--db", default=os.environ.get("ANIZONE_DB", "anizone.db"))
@@ -69,7 +72,8 @@ def main(argv=None):
             from .mal_ids import load_mal_ids
             extra = load_mal_ids(os.path.join(os.path.dirname(os.path.abspath(a.db)), "mal_ids.json"))
         print(json.dumps(cr.run(limit=a.limit, force=a.force or bool(a.id), urls=urls,
-                                extra_ids=extra, follow_links=not a.no_follow and not a.id), indent=2))
+                                extra_ids=extra, follow_links=not a.no_follow and not a.id,
+                                refresh=a.refresh), indent=2))
 
     elif a.cmd == "serve":
         os.environ["ANIZONE_DB"] = a.db
