@@ -239,7 +239,7 @@ async function animePage(id) {
   const he = c => c && (c.he || c.en);
   const info = [
     ["סוג", a.type], ["פרקים", a.episodes], ["אורך פרק", a.duration_minutes ? a.duration_minutes + " דקות" : ""],
-    ["סטטוס", a.status], ["עונה", a.season?.label], ["שידור", (window.AZX && a.status === "בשידור" && AZX.broadcastIL(a.broadcast)) || (a.broadcast?.label ? a.broadcast.label + " (שעון יפן)" : "")],
+    ["סטטוס", a.status], ["עונה", a.season?.label], ["שידור", (window.AZX && a.status === "בשידור" && AZX.broadcastIL(a)) || (a.broadcast?.label ? a.broadcast.label + " (שעון יפן)" : "")],
     ["תחילת שידור", a.aired_from ? new Date(a.aired_from).toLocaleDateString("he-IL") : ""],
     ["דמוגרפיה", he(a.demographic)], ["סטודיו", (a.studios || []).join(", ")],
     ["מפיקים", (a.producers || []).join(", ")], ["זכויות", (a.licensors || []).join(", ")],
