@@ -95,14 +95,20 @@ def export_static_api(db_path: str, out_dir: str, min_israel_votes: int = 5) -> 
     cats: dict[str, dict] = {}
     cat_items: dict[str, list] = defaultdict(list)
     types: dict[str, list] = defaultdict(list)
+    schedule: list[dict] = []
     n = 0
     for row in con.execute("SELECT data FROM anime ORDER BY id"):
         a = json.loads(row["data"])
         if not a.get("id"):
             continue
         a["attribution"] = {**ATTRIBUTION, "page": a.get("url")}
+        b = a.get("broadcast")
+        if isinstance(b, dict):
+            b["timezone"] = "Asia/Tokyo"  # AniZone lists the Japanese TV slot (JST)
         _write(v1 / "anime" / f"{a['id']}.json", a)
         s = summary(a)
+        if a.get("status") == "בשידור" and isinstance(b, dict) and b.get("day") and b.get("time"):
+            schedule.append({**s, "broadcast": b, "aired_from": a.get("aired_from")})
         summaries.append(s)
         t = a.get("titles") or {}
         search_rows.append([a["id"], t.get("hebrew"), t.get("english"), t.get("romaji"),
@@ -164,6 +170,10 @@ def export_static_api(db_path: str, out_dir: str, min_israel_votes: int = 5) -> 
         "data": search_rows,
     })
     _write(v1 / "ids.json", {"count": len(summaries), "data": sorted(s["id"] for s in summaries)})
+    schedule.sort(key=by_pop)
+    _write(v1 / "schedule.json", {
+        "note": "airing anime and their weekly Japanese TV slot; broadcast.timezone is Asia/Tokyo (JST)",
+        "count": len(schedule), "data": schedule})
 
     meta = {r["key"]: r["value"] for r in con.execute("SELECT key, value FROM meta")}
     _write(v1 / "index.json", {
@@ -187,6 +197,7 @@ def export_static_api(db_path: str, out_dir: str, min_israel_votes: int = 5) -> 
             "type": "/v1/types/{slug}/{page}.json",
             "search_index": "/v1/search.json",
             "ids": "/v1/ids.json",
+            "schedule": "/v1/schedule.json",
         },
     })
 
