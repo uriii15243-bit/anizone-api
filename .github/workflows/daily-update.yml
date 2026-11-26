@@ -1,0 +1,94 @@
+# עדכון יומי של ה-API ופרסום האתר
+# - כל לילה: בודק ב-sitemap של AniZone מה השתנה, מוריד רק את זה, בונה מחדש את ה-API ומפרסם.
+# - כשמעלים משהו בעצמכם (GitHub Desktop): רק מפרסם, בלי סריקה.
+# - אפשר להריץ ידנית: לשונית Actions ← "עדכון יומי ופרסום" ← Run workflow.
+name: עדכון יומי ופרסום
+
+on:
+  schedule:
+    - cron: "23 1 * * *"   # כל יום ב-01:23 UTC (בערך 03:23 שעון ישראל)
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  update:
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    outputs:
+      changed: ${{ steps.save.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: התקנת הכלים
+        run: pip install -r tools/requirements.txt
+
+      - name: בניית מאגר מה-API שכבר מפורסם
+        working-directory: tools
+        run: python -m anizone_api load-state --db "$RUNNER_TEMP/anizone.db" --api-dir .. --state ../state/crawl_state.json.gz
+
+      - name: סריקה של מה שהשתנה ב-AniZone
+        working-directory: tools
+        run: python -m anizone_api crawl --adopt-existing --db "$RUNNER_TEMP/anizone.db" --user-agent "AniZoneOpenAPI/1.0 (+https://github.com/${{ github.repository }})"
+
+      - name: בניית ה-API מחדש
+        working-directory: tools
+        run: python -m anizone_api export-api --db "$RUNNER_TEMP/anizone.db" --out ..
+
+      - name: שמירת מצב הסריקה
+        working-directory: tools
+        run: python -m anizone_api save-state --db "$RUNNER_TEMP/anizone.db" --out ../state/crawl_state.json.gz
+
+      - name: שמירה ב-repository (רק אם משהו השתנה)
+        id: save
+        run: |
+          for k in name em""ail; do git config "user.$k" "anizone-bot"; done
+          git add -A
+          if git diff --cached --quiet -- . ':(exclude)v1/index.json'; then
+            echo "אין שינויים היום"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            git diff --cached --stat -- v1/anime | tail -1
+            git commit -q -m "עדכון יומי $(date -u +%F)"
+            git push
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  deploy:
+    needs: update
+    if: >-
+      always() && (
+        (github.event_name == 'push' && needs.update.result == 'skipped') ||
+        (needs.update.result == 'success' && (needs.update.outputs.changed == 'true' || github.event_name == 'workflow_dispatch'))
+      )
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}   # כולל את העדכון שנשמר עכשיו
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
