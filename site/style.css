@@ -179,6 +179,7 @@ main{min-height:70vh;outline:none}
 .wl-btn:hover{border-color:var(--accent)}
 .wl-btn.on{background:var(--accent);border-color:var(--accent);color:#fff}
 .next-ep{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-top:14px;padding:10px 14px;border-radius:12px;background:rgba(255,79,121,.12);border:1px solid rgba(255,79,121,.35);font-size:15px;width:fit-content;max-width:100%}
+.next-ep.off{background:rgba(255,255,255,.05);border-color:var(--line);color:var(--muted)}
 .next-ep b{color:var(--accent2)}.next-ep small{color:var(--muted)}
 .next-ep .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px var(--accent);animation:pulse 1.6s infinite}
 @keyframes pulse{50%{opacity:.35}}
